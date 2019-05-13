@@ -28,5 +28,13 @@ public class ActNode extends BaseNode {
                 robot.takeFuel();
                 break;
         }
+        if(this.getChild()!=null){
+            this.getChild().execute(robot);
+        }
+    }
+
+    @Override
+    public String toString(){
+        return this.getChild()!=null ? action.toString() + "\n" +this.getChild().toString():action.toString();
     }
 }

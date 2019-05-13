@@ -88,6 +88,7 @@ public class Parser {
     static Pattern TURNR = Pattern.compile("turnR");
     static Pattern TAKEFUEL = Pattern.compile("takeFuel");
     static Pattern WAIT = Pattern.compile("wait");
+    static Pattern LOOP = Pattern.compile("loop");
 
     /**
      * PROG ::= STMT+
@@ -98,7 +99,7 @@ public class Parser {
             if (toReturn == null) {
                 toReturn = parseStmt(s);
             } else {
-                toReturn = addToTree(toReturn,s);
+                toReturn = addToTree(toReturn, s);
             }
         }
         return toReturn;
@@ -109,14 +110,18 @@ public class Parser {
 
     private static BaseNode addToTree(BaseNode root, Scanner s) {
         BaseNode currentTreeLocation = root;
-        while(currentTreeLocation.getChild()!=null){
+        // Finds the end of the tree
+        while (currentTreeLocation.getChild() != null) {
             currentTreeLocation = currentTreeLocation.getChild();
         }
+        // Adds a leaf
         currentTreeLocation.setChild(parseStmt(s));
-        if(currentTreeLocation.getChild()!=null) {
+        if (currentTreeLocation.getChild() != null) {
+            // sets the leaf's parent
             currentTreeLocation.getChild().setParent(currentTreeLocation);
         }
-        while(currentTreeLocation.getParent()!=null){
+        // Move to the root of the tree and returns it
+        while (currentTreeLocation.getParent() != null) {
             currentTreeLocation = currentTreeLocation.getParent();
         }
         return currentTreeLocation;
@@ -140,7 +145,20 @@ public class Parser {
     }
 
     private static BaseNode parseLoop(Scanner s) {
-        return null;
+        LoopNode toReturn = null;
+        if (checkFor(LOOP, s)) {
+            toReturn = new LoopNode();
+            if (checkFor(OPENBRACE, s)) {
+                while (!checkFor(CLOSEBRACE, s)&&s.hasNext()) {
+                    if (toReturn.getLoopNodeSubTree() == null) {
+                        toReturn.setLoopNodeSubTree(parseStmt(s));
+                    } else {
+                        toReturn.setLoopNodeSubTree(addToTree(toReturn.getLoopNodeSubTree(), s));
+                    }
+                }
+            }
+        }
+        return toReturn;
     }
 
     private static BaseNode parseAct(Scanner s) {
@@ -155,8 +173,6 @@ public class Parser {
             toReturn = new ActNode(ActNode.actionType.takeFuel);
         } else if (checkFor(WAIT, s)) {
             toReturn = new ActNode(ActNode.actionType.wait);
-        } else {
-            fail("parseAct error", s);
         }
         return toReturn;
     }
