@@ -89,6 +89,8 @@ public class Parser {
     static Pattern TAKEFUEL = Pattern.compile("takeFuel");
     static Pattern WAIT = Pattern.compile("wait");
     static Pattern LOOP = Pattern.compile("loop");
+    static Pattern SHEILDON = Pattern.compile("shieldOn");
+    static Pattern SHIELDOFF = Pattern.compile("shieldOff");
 
     /**
      * PROG ::= STMT+
@@ -148,12 +150,13 @@ public class Parser {
         LoopNode toReturn = null;
         if (checkFor(LOOP, s)) {
             toReturn = new LoopNode();
+            toReturn.setLoopNodeSubTree(new BlockNode());
             if (checkFor(OPENBRACE, s)) {
                 while (!checkFor(CLOSEBRACE, s)&&s.hasNext()) {
-                    if (toReturn.getLoopNodeSubTree() == null) {
-                        toReturn.setLoopNodeSubTree(parseStmt(s));
+                    if (toReturn.getLoopNodeSubTree().getBlock() == null) {
+                        toReturn.getLoopNodeSubTree().setBlock(parseStmt(s));
                     } else {
-                        toReturn.setLoopNodeSubTree(addToTree(toReturn.getLoopNodeSubTree(), s));
+                        toReturn.getLoopNodeSubTree().setBlock(addToTree(toReturn.getLoopNodeSubTree().getBlock(), s));
                     }
                 }
             }
@@ -173,6 +176,10 @@ public class Parser {
             toReturn = new ActNode(ActNode.actionType.takeFuel);
         } else if (checkFor(WAIT, s)) {
             toReturn = new ActNode(ActNode.actionType.wait);
+        } else if(checkFor(SHEILDON,s)){
+            toReturn = new ActNode(ActNode.actionType.shieldOn);
+        } else if(checkFor(SHIELDOFF,s)){
+            toReturn = new ActNode(ActNode.actionType.shieldOff);
         }
         return toReturn;
     }

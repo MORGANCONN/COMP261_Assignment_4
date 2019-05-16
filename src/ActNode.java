@@ -5,7 +5,9 @@ public class ActNode extends BaseNode {
         turnL,
         turnR,
         takeFuel,
-        wait
+        wait,
+        shieldOn,
+        shieldOff
     }
     public ActNode(actionType action){
         this.action = action;
@@ -26,6 +28,12 @@ public class ActNode extends BaseNode {
                 break;
             case takeFuel:
                 robot.takeFuel();
+                break;
+            case shieldOn:
+                robot.setShield(true);
+                break;
+            case shieldOff:
+                robot.setShield(false);
                 break;
         }
         if(this.getChild()!=null){
