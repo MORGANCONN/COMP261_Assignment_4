@@ -79,6 +79,7 @@ public class Parser {
     // Useful Patterns
 
     static Pattern NUMPAT = Pattern.compile("-?\\d+"); // ("-?(0|[1-9][0-9]*)");
+    static Pattern COMMA = Pattern.compile(",");
     static Pattern OPENPAREN = Pattern.compile("\\(");
     static Pattern CLOSEPAREN = Pattern.compile("\\)");
     static Pattern OPENBRACE = Pattern.compile("\\{");
@@ -91,6 +92,9 @@ public class Parser {
     static Pattern LOOP = Pattern.compile("loop");
     static Pattern SHEILDON = Pattern.compile("shieldOn");
     static Pattern SHIELDOFF = Pattern.compile("shieldOff");
+    static Pattern IF = Pattern.compile("if");
+    static Pattern WHILE = Pattern.compile("while");
+    static Pattern TURNAROUND = Pattern.compile("turnAround");
 
     /**
      * PROG ::= STMT+
@@ -101,7 +105,8 @@ public class Parser {
             if (toReturn == null) {
                 toReturn = parseStmt(s);
             } else {
-                toReturn = addToTree(toReturn, s);
+                BaseNode toAdd = parseStmt(s);
+                toReturn = addToTree(toReturn, toAdd);
             }
         }
         return toReturn;
@@ -110,14 +115,24 @@ public class Parser {
 
     // Tree Access Methods
 
-    private static BaseNode addToTree(BaseNode root, Scanner s) {
+    private static ArrayList<BaseNode> addToBlock(BlockNode root, Scanner s) {
+        BaseNode temp = parseStmt(s);
+        if (temp instanceof PayloadNode || root.block.size() == 0) {
+            root.addNewBranch(temp);
+        } else {
+            root.setBranch(addToTree(root.getBlock().get(root.currentBranchInUse), temp));
+        }
+        return root.getBlock();
+    }
+
+    private static BaseNode addToTree(BaseNode root, BaseNode itemToAdd) {
         BaseNode currentTreeLocation = root;
         // Finds the end of the tree
         while (currentTreeLocation.getChild() != null) {
             currentTreeLocation = currentTreeLocation.getChild();
         }
         // Adds a leaf
-        currentTreeLocation.setChild(parseStmt(s));
+        currentTreeLocation.setChild(itemToAdd);
         if (currentTreeLocation.getChild() != null) {
             // sets the leaf's parent
             currentTreeLocation.getChild().setParent(currentTreeLocation);
@@ -147,21 +162,75 @@ public class Parser {
     }
 
     private static BaseNode parseLoop(Scanner s) {
-        LoopNode toReturn = null;
+        PayloadNode toReturn = null;
         if (checkFor(LOOP, s)) {
             toReturn = new LoopNode();
-            toReturn.setLoopNodeSubTree(new BlockNode());
+            toReturn.setPayloadNodeSubTree(new BlockNode());
             if (checkFor(OPENBRACE, s)) {
-                while (!checkFor(CLOSEBRACE, s)&&s.hasNext()) {
-                    if (toReturn.getLoopNodeSubTree().getBlock() == null) {
-                        toReturn.getLoopNodeSubTree().setBlock(parseStmt(s));
+                while (!checkFor(CLOSEBRACE, s) && s.hasNext()) {
+                    if (toReturn.getPayloadNodeSubTree().getBlock() == null) {
+                        ArrayList<BaseNode> toAdd = new ArrayList<>();
+                        toAdd.add(parseStmt(s));
+                        toReturn.getPayloadNodeSubTree().setBlock(toAdd);
                     } else {
-                        toReturn.getLoopNodeSubTree().setBlock(addToTree(toReturn.getLoopNodeSubTree().getBlock(), s));
+                        toReturn.getPayloadNodeSubTree().setBlock(addToBlock(toReturn.getPayloadNodeSubTree(), s));
                     }
                 }
             }
+            return toReturn;
+        } else {
+            if (checkFor(IF, s)) {
+                toReturn = new IfNode();
+            } else if (checkFor(WHILE, s)) {
+                toReturn = new WhileNode();
+            } else {
+                // if no appropriate statements are found an error is reported
+                fail("No Valid payload node found", s);
+                return null;
+            }
+            toReturn.setPayloadNodeSubTree(new BlockNode());
+            require(OPENPAREN, "Invalid statement format(No Open Paren)", s);
+            Renlop tempRenlop = parseRenlop(s);
+            require(OPENPAREN, "Invalid statement format(No Open Paren)", s);
+            Sen tempSensor = parseSensor(s);
+            require(COMMA, "Invalid statement format(No Comma)", s);
+            int tempCondNum = requireInt(NUMPAT, "No Value Found", s);
+            require(CLOSEPAREN, "No Close Paren Found", s);
+            require(CLOSEPAREN, "No Close Paren Found", s);
+            require(OPENBRACE,"No Open Brace Found", s);
+                while (!checkFor(CLOSEBRACE, s) && s.hasNext()) {
+                    if (toReturn.getPayloadNodeSubTree().getBlock() == null) {
+                        ArrayList<BaseNode> toAdd = new ArrayList<>();
+                        toAdd.add(parseStmt(s));
+                        toReturn.getPayloadNodeSubTree().setBlock(toAdd);
+                    } else {
+                        toReturn.getPayloadNodeSubTree().setBlock(addToBlock(toReturn.getPayloadNodeSubTree(), s));
+                    }
+                }
+
+            toReturn.setCondition(new Condition(tempSensor, tempRenlop, tempCondNum));
+            return toReturn;
         }
-        return toReturn;
+    }
+
+    private static Sen parseSensor(Scanner s) {
+        for (Sen.senType senType : Sen.senType.values()) {
+            if (checkFor(senType.toString(), s)) {
+                return new Sen(senType);
+            }
+        }
+        fail("No valid sensor", s);
+        return null;
+    }
+
+    private static Renlop parseRenlop(Scanner s) {
+        for (Renlop.renlopTypes r : Renlop.renlopTypes.values()) {
+            if (checkFor(r.name(), s)) {
+                return new Renlop(r);
+            }
+        }
+        fail("No Valid Renlop Found", s);
+        return null;
     }
 
     private static BaseNode parseAct(Scanner s) {
@@ -176,10 +245,12 @@ public class Parser {
             toReturn = new ActNode(ActNode.actionType.takeFuel);
         } else if (checkFor(WAIT, s)) {
             toReturn = new ActNode(ActNode.actionType.wait);
-        } else if(checkFor(SHEILDON,s)){
+        } else if (checkFor(SHEILDON, s)) {
             toReturn = new ActNode(ActNode.actionType.shieldOn);
-        } else if(checkFor(SHIELDOFF,s)){
+        } else if (checkFor(SHIELDOFF, s)) {
             toReturn = new ActNode(ActNode.actionType.shieldOff);
+        } else if(checkFor(TURNAROUND,s)){
+            toReturn = new ActNode(ActNode.actionType.turnAround);
         }
         return toReturn;
     }

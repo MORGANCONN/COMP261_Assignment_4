@@ -7,7 +7,8 @@ public class ActNode extends BaseNode {
         takeFuel,
         wait,
         shieldOn,
-        shieldOff
+        shieldOff,
+        turnAround
     }
     public ActNode(actionType action){
         this.action = action;
@@ -35,6 +36,9 @@ public class ActNode extends BaseNode {
             case shieldOff:
                 robot.setShield(false);
                 break;
+            case turnAround:
+                robot.turnAround();
+                break;
         }
         if(this.getChild()!=null){
             this.getChild().execute(robot);
@@ -43,6 +47,6 @@ public class ActNode extends BaseNode {
 
     @Override
     public String toString(){
-        return this.getChild()!=null ? action.toString() + "\n" +this.getChild().toString():action.toString();
+        return this.getChild()!=null ? action.toString() + ";\n" +this.getChild().toString():action.toString() + ";\n";
     }
 }
