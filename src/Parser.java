@@ -95,6 +95,14 @@ public class Parser {
     static Pattern IF = Pattern.compile("if");
     static Pattern WHILE = Pattern.compile("while");
     static Pattern TURNAROUND = Pattern.compile("turnAround");
+    static Pattern ELSE = Pattern.compile("else");
+    static Pattern AND = Pattern.compile("and");
+    static Pattern OR = Pattern.compile("or");
+    static Pattern NOT = Pattern.compile("not");
+    static Pattern ADD = Pattern.compile("add");
+    static Pattern SUB = Pattern.compile("sub");
+    static Pattern MUL = Pattern.compile("mul");
+    static Pattern DIV = Pattern.compile("div");
 
     /**
      * PROG ::= STMT+
@@ -154,9 +162,38 @@ public class Parser {
         toReturn = parseAct(s);
         if (toReturn == null) {
             toReturn = parseLoop(s);
+            if (toReturn instanceof IfNode) {
+                if (checkFor(ELSE, s)) {
+                    ElseNode temp = ParseElse(s);
+                    temp.setParent(toReturn);
+                    toReturn.setChild(temp);
+                }
+            }
         }
         if (toReturn == null) {
             fail("parseStmt error", s);
+        }
+        return toReturn;
+    }
+
+    private static ElseNode ParseElse(Scanner s) {
+        ElseNode toReturn = null;
+        require(OPENBRACE, "Invalid else", s);
+        toReturn = new ElseNode();
+        toReturn.setPayloadNodeSubTree(parseBlock(s));
+        return toReturn;
+    }
+
+    private static BlockNode parseBlock(Scanner s) {
+        BlockNode toReturn = new BlockNode();
+        while (!checkFor(CLOSEBRACE, s) && s.hasNext()) {
+            if (toReturn.getBlock() == null) {
+                ArrayList<BaseNode> toAdd = new ArrayList<>();
+                toAdd.add(parseStmt(s));
+                toReturn.setBlock(toAdd);
+            } else {
+                toReturn.setBlock(addToBlock(toReturn, s));
+            }
         }
         return toReturn;
     }
@@ -167,15 +204,7 @@ public class Parser {
             toReturn = new LoopNode();
             toReturn.setPayloadNodeSubTree(new BlockNode());
             if (checkFor(OPENBRACE, s)) {
-                while (!checkFor(CLOSEBRACE, s) && s.hasNext()) {
-                    if (toReturn.getPayloadNodeSubTree().getBlock() == null) {
-                        ArrayList<BaseNode> toAdd = new ArrayList<>();
-                        toAdd.add(parseStmt(s));
-                        toReturn.getPayloadNodeSubTree().setBlock(toAdd);
-                    } else {
-                        toReturn.getPayloadNodeSubTree().setBlock(addToBlock(toReturn.getPayloadNodeSubTree(), s));
-                    }
-                }
+                toReturn.setPayloadNodeSubTree(parseBlock(s));
             }
             return toReturn;
         } else {
@@ -190,26 +219,97 @@ public class Parser {
             }
             toReturn.setPayloadNodeSubTree(new BlockNode());
             require(OPENPAREN, "Invalid statement format(No Open Paren)", s);
-            Renlop tempRenlop = parseRenlop(s);
-            require(OPENPAREN, "Invalid statement format(No Open Paren)", s);
-            Sen tempSensor = parseSensor(s);
-            require(COMMA, "Invalid statement format(No Comma)", s);
-            int tempCondNum = requireInt(NUMPAT, "No Value Found", s);
-            require(CLOSEPAREN, "No Close Paren Found", s);
-            require(CLOSEPAREN, "No Close Paren Found", s);
-            require(OPENBRACE,"No Open Brace Found", s);
-                while (!checkFor(CLOSEBRACE, s) && s.hasNext()) {
-                    if (toReturn.getPayloadNodeSubTree().getBlock() == null) {
-                        ArrayList<BaseNode> toAdd = new ArrayList<>();
-                        toAdd.add(parseStmt(s));
-                        toReturn.getPayloadNodeSubTree().setBlock(toAdd);
-                    } else {
-                        toReturn.getPayloadNodeSubTree().setBlock(addToBlock(toReturn.getPayloadNodeSubTree(), s));
-                    }
-                }
-
-            toReturn.setCondition(new Condition(tempSensor, tempRenlop, tempCondNum));
+            toReturn.setCondition(parseCondition(s));
+            require(CLOSEPAREN, "No Closing Paren Found", s);
+            require(OPENBRACE, "No Open Brace Found", s);
+            toReturn.setPayloadNodeSubTree(parseBlock(s));
             return toReturn;
+        }
+    }
+
+    private static Condition parseCondition(Scanner s) {
+        Condition toReturn = null;
+        Condition left = null;
+        Condition right = null;
+        if (checkFor(AND, s)) {
+            require(OPENPAREN, "Invalid statement format(No Open Paren)", s);
+            left = parseCondition(s);
+            require(COMMA, "No Comma Found, Invalid Condition", s);
+            right = parseCondition(s);
+            require(CLOSEPAREN, "No Closing Paren Found", s);
+            toReturn = new AndNode(left, right);
+        } else if (checkFor(OR, s)) {
+            require(OPENPAREN, "Invalid statement format(No Open Paren)", s);
+            left = parseCondition(s);
+            require(COMMA, "No Comma Found, Invalid Condition", s);
+            right = parseCondition(s);
+            require(CLOSEPAREN, "No Closing Paren Found", s);
+            toReturn = new OrNode(left, right);
+        } else if (checkFor(NOT, s)) {
+            require(OPENPAREN, "No opening parentheses found", s);
+            toReturn = new NotNode(parseCondition(s));
+            require(CLOSEPAREN, "No Closing Paren Found", s);
+        } else {
+            for (Renlop.renlopTypes R : Renlop.renlopTypes.values()) {
+                if(checkFor(R.toString(),s)) {
+                    require(OPENPAREN, "Invalid statement format(No Open Paren)", s);
+                    Expression expLeft = parseExp(s);
+                    require(COMMA, "No Comma Found", s);
+                    Expression expRight = parseExp(s);
+                    require(CLOSEPAREN, "No Closing Paren Found", s);
+                    toReturn = new RenlopCondition(new Renlop(R), expLeft, expRight);
+                }
+            }
+        }
+        if (toReturn == null) {
+            fail("Invalid Condition", s);
+        }
+
+        if (toReturn != null) {
+            return toReturn;
+        }
+        return null;
+    }
+
+    private static Expression parseExp(Scanner s) {
+
+        if (s.hasNext(NUMPAT)) {
+            return new Number(requireInt(NUMPAT, "No Number Found", s));
+        } else if (checkFor(ADD, s)) {
+            require(OPENPAREN, "Invalid Expression", s);
+            Expression left = parseExp(s);
+            require(COMMA, "Invalid Expression, No Comma", s);
+            Expression right = parseExp(s);
+            require(CLOSEPAREN, "Invalid expression, no close paren", s);
+            return new Add(left, right);
+        } else if (checkFor(SUB, s)) {
+            require(OPENPAREN, "Invalid Expression", s);
+            Expression left = parseExp(s);
+            require(COMMA, "Invalid Expression, No Comma", s);
+            Expression right = parseExp(s);
+            require(CLOSEPAREN, "Invalid expression, no close paren", s);
+            return new Subtraction(left, right);
+        } else if (checkFor(MUL, s)) {
+            require(OPENPAREN, "Invalid Expression", s);
+            Expression left = parseExp(s);
+            require(COMMA, "Invalid Expression, No Comma", s);
+            Expression right = parseExp(s);
+            require(CLOSEPAREN, "Invalid expression, no close paren", s);
+            return new Multiply(left, right);
+        } else if (checkFor(DIV, s)) {
+            require(OPENPAREN, "Invalid Expression", s);
+            Expression left = parseExp(s);
+            require(COMMA, "Invalid Expression, No Comma", s);
+            Expression right = parseExp(s);
+            require(CLOSEPAREN, "Invalid expression, no close paren", s);
+            return new Divide(left, right);
+        } else {
+            for (Sen.senType S : Sen.senType.values()) {
+                if (checkFor(S.toString(), s)) {
+                    return new Sen(S);
+                }
+            }
+            return null;
         }
     }
 
@@ -234,9 +334,14 @@ public class Parser {
     }
 
     private static BaseNode parseAct(Scanner s) {
-        BaseNode toReturn = null;
+        ActNode toReturn = null;
         if (checkFor(MOVE, s)) {
             toReturn = new ActNode(ActNode.actionType.move);
+            if (checkFor(OPENPAREN, s)) {
+                Expression actExpression = parseExp(s);
+                toReturn.setActArgument(actExpression);
+                require(CLOSEPAREN, "Invalid format, No Closing Paren", s);
+            }
         } else if (checkFor(TURNL, s)) {
             toReturn = new ActNode(ActNode.actionType.turnL);
         } else if (checkFor(TURNR, s)) {
@@ -245,11 +350,16 @@ public class Parser {
             toReturn = new ActNode(ActNode.actionType.takeFuel);
         } else if (checkFor(WAIT, s)) {
             toReturn = new ActNode(ActNode.actionType.wait);
+            if (checkFor(OPENPAREN, s)) {
+                Expression actExpression = parseExp(s);
+                toReturn.setActArgument(actExpression);
+                require(CLOSEPAREN, "Invalid format, No Closing Paren", s);
+            }
         } else if (checkFor(SHEILDON, s)) {
             toReturn = new ActNode(ActNode.actionType.shieldOn);
         } else if (checkFor(SHIELDOFF, s)) {
             toReturn = new ActNode(ActNode.actionType.shieldOff);
-        } else if(checkFor(TURNAROUND,s)){
+        } else if (checkFor(TURNAROUND, s)) {
             toReturn = new ActNode(ActNode.actionType.turnAround);
         }
         return toReturn;

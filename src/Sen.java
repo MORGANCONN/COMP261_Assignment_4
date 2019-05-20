@@ -1,4 +1,4 @@
-public class Sen {
+public class Sen implements Expression{
     senType sensorType;
     enum senType{
         fuelLeft,
